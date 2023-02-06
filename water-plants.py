@@ -43,7 +43,7 @@ class PlantDatabase():
         except:
             print("Could not create plant.")
 
-    def water_plant(self, plant_name):
+    def water_plant(self, plant_name:str):
         date = datetime.now().date()
         plant_id = self.get_plant_id(plant_name)
 
@@ -51,27 +51,31 @@ class PlantDatabase():
 
         return date
 
-    def undo_watering(self, plant_name):
+    def undo_watering(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
 
         self.__db.execute("DELETE FROM Waterings WHERE id=(SELECT MAX(w.id) FROM Waterings w)")
 
-    def delete_plant(self, plant_name):
+    def delete_plant(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
 
         self.__db.execute("DELETE FROM Plants WHERE id=?", [plant_id])
         self.__db.execute("DELETE FROM Waterings WHERE plant_id=?", [plant_id])
 
-    def get_last_time_watered(self, plant_name):
+    def get_last_time_watered(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
 
         date = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ? LIMIT 1", [plant_id]).fetchone()
+
         if date:
-            return date[0]
+            watering_date_str = date[0]
+            watering_date = datetime.strptime(watering_date_str, "%Y-%m-%d").date()
         else:
-            return None
+            watering_date = None
+
+        return watering_date
     
-    def get_all_waterings(self, plant_name):
+    def get_all_waterings(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
 
         dates = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ?", [plant_id]).fetchall()
@@ -116,9 +120,8 @@ class PlantApp():
             plants = self.__plant_db.get_all_plant_names()
             print("Last times watered:")
             for p_name in plants:
-                watering_date_str = self.__plant_db.get_last_time_watered(p_name)
-                if watering_date_str:
-                    watering_date = datetime.strptime(watering_date_str, "%Y-%m-%d").date()
+                watering_date = self.__plant_db.get_last_time_watered(p_name)
+                if watering_date:
                     curr_date = datetime.now().date()
                     delta = curr_date - watering_date
                     delta = delta.days
