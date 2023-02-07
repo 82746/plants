@@ -2,7 +2,7 @@
 
 import sqlite3
 import os 
-from datetime import datetime
+from datetime import *
 
 class PlantDatabase():
     def __init__(self, db_name:str):
@@ -21,7 +21,7 @@ class PlantDatabase():
     def __create_tables(self):
         try:
             self.__db.execute("BEGIN")
-            self.__db.execute("CREATE TABLE Plants (id INTEGER PRIMARY KEY, name TEXT UNIQUE, species TEXT)")
+            self.__db.execute("CREATE TABLE Plants (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
             self.__db.execute("CREATE TABLE Waterings (id INTEGER PRIMARY KEY, plant_id REFERENCE Plants, date DATE)")
             self.__db.execute("COMMIT")
         except:
@@ -37,39 +37,57 @@ class PlantDatabase():
 
         return plant_id 
 
-    def create_plant(self, plant_name, plant_species):
+    def create_plant(self, plant_name):
         try:
-            self.__db.execute("INSERT INTO Plants (name, species) VALUES (?, ?)", [plant_name, plant_species])
+            self.__db.execute("INSERT INTO Plants (name) VALUES (?)", [plant_name])
+            return True
+
         except:
             print("Could not create plant.")
+            return None
 
-    def water_plant(self, plant_name:str):
-        date = datetime.now().date()
+    def water_plant(self, plant_name:str, date:str):
+        """
+        date in isoformat
+        """
         plant_id = self.get_plant_id(plant_name)
+        if plant_id == None:
+            return None
 
         self.__db.execute("INSERT INTO Waterings (plant_id, date) VALUES (?, ?)", [plant_id, date])
 
-        return date
+        return True
 
     def undo_watering(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
+        if plant_id == None:
+            return None
 
-        self.__db.execute("DELETE FROM Waterings WHERE id=(SELECT MAX(w.id) FROM Waterings w)")
+        self.__db.execute("DELETE FROM Waterings WHERE id=(SELECT MAX(w.id) FROM Waterings w WHERE w.plant_id = ?)", [plant_id])
+
+        return True
 
     def delete_plant(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
+        if plant_id == None:
+            return None
 
         self.__db.execute("DELETE FROM Plants WHERE id=?", [plant_id])
         self.__db.execute("DELETE FROM Waterings WHERE plant_id=?", [plant_id])
 
+        return True
+
     def get_last_time_watered(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
+        if plant_id == None:
+            return None
 
-        date = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ? LIMIT 1", [plant_id]).fetchone()
+        date = self.__db.execute("SELECT w.date, MAX(w.id) FROM Waterings w WHERE w.plant_id = ?", [plant_id]).fetchone()[0]
 
         if date:
-            watering_date_str = date[0]
-            watering_date = datetime.strptime(watering_date_str, "%Y-%m-%d").date()
+            watering_date_str = date
+            #watering_date = datetime.strptime(watering_date_str, "%Y-%m-%d").date()
+            watering_date = datetime.fromisoformat(watering_date_str).date()
         else:
             watering_date = None
 
@@ -77,6 +95,8 @@ class PlantDatabase():
     
     def get_all_waterings(self, plant_name:str):
         plant_id = self.get_plant_id(plant_name)
+        if plant_id == None:
+            return None
 
         dates = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ?", [plant_id]).fetchall()
 
@@ -140,28 +160,49 @@ class PlantApp():
 
     def __run(self):
         while True:
-            os.system("clear")
             self.print_instructions()
             command = input("> ")
-            os.system("clear")
 
             if command == "c":
                 print("Create plant\n")
 
                 p_name = input("Plant name: ")
-                p_species = input("Plant species: ")
-                self.__plant_db.create_plant(p_name, p_species)
 
-                print("plant created.")
+                if self.__plant_db.create_plant(p_name):
+                    print("plant created.")
 
             elif command == "w":
                 print("Water plant\n")
 
                 self.list_last_times_watered()
                 p_name = input("Plant name: ")
-                date = self.__plant_db.water_plant(p_name)
+    
+                date = datetime.now().date()
+                print(date)
+                do_mod = input("Modify date? (y/n): ")
+                if do_mod:
+                    print("To leave a value unchanged, input blank.")
+                    year = input("Year: ").strip()
+                    month = input("Month: ").strip()
+                    day = input("Day: ").strip()
+                    try:
+                        if year == "":
+                            year = date.year
+                        if month == "":
+                            month = date.month
+                        if day == "":
+                            day = date.day
 
-                print(f'Plant watered {date}.')
+                        date = datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d")
+
+                    except:
+                        print("invalid date.")
+                        continue
+
+                if self.__plant_db.water_plant(p_name, date.isoformat()):
+                    print(f'Plant watered {date}.')
+                    print()
+
 
             elif command == "lw":
                 print("Last waterings\n")
@@ -174,16 +215,18 @@ class PlantApp():
                 print("Undo last watering\n")
                 self.list_last_times_watered()
                 p_name = input("Plant name: ")
-                self.__plant_db.undo_watering(p_name)
 
-                print("Watering undone.")
+                if self.__plant_db.undo_watering(p_name):
+                    print("Watering undone.")
+                    print()
 
             elif command == "d":
                 self.list_plants()
                 p_name = input("Plant name: ")
-                self.__plant_db.delete_plant(p_name)
 
-                print("plant deleted.")
+                if self.__plant_db.delete_plant(p_name):
+                    print("plant deleted.")
+                    print()
 
             elif command == "q":
                 self.__plant_db.quit()
@@ -191,8 +234,6 @@ class PlantApp():
             
             else:
                 continue
-
-            input("Press [enter] to continue...")
             
                 
 
