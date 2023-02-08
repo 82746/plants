@@ -20,9 +20,10 @@ class PlantDatabase():
 
     def __create_tables(self):
         try:
+            self.__db.execute("PRAGMA foreign_keys = ON")
             self.__db.execute("BEGIN")
             self.__db.execute("CREATE TABLE Plants (id INTEGER PRIMARY KEY, name TEXT UNIQUE)")
-            self.__db.execute("CREATE TABLE Waterings (id INTEGER PRIMARY KEY, plant_id REFERENCE Plants, date DATE)")
+            self.__db.execute("CREATE TABLE Waterings (id INTEGER PRIMARY KEY, plant_id REFERENCE Plants ON DELETE CASCADE, date DATE)")
             self.__db.execute("COMMIT")
         except:
             pass
