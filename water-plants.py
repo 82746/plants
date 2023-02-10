@@ -116,20 +116,28 @@ class PlantDatabase():
         self.__db.commit()
         self.__db.close()
 
+    def undo_changes(self):
+        self.__db.rollback()
+
+    def save_change(self):
+        self.__db.commit()
+
 
 class PlantApp():
     def __init__(self):
         self.__db_filename = "plant.db"
         self.__plant_db = PlantDatabase(self.__db_filename)
-
+        self.__changes_list = []
 
     def print_instructions(self):
         print("\033[32m\033[2m[c]\033[22;39m Create plant")
-        print("\033[34m\033[2m[w]\033[22;39m Water plant")
-        print("\033[34m\033[2m[lw]\033[22;39m List last times watered")
+        print("\033[32m\033[2m[d]\033[22;39m Delete plant")
         print("\033[32m\033[2m[ls]\033[22;39m List plants")
-        print("\033[31m\033[2m[u]\033[22;39m Unwater plant")
-        print("\033[31m\033[2m[d]\033[22;39m Delete plant")
+        print("\033[34m\033[2m[w]\033[22;39m Water plant")
+        print("\033[34m\033[2m[u]\033[22;39m Unwater plant")
+        print("\033[34m\033[2m[lw]\033[22;39m List last times watered")
+        print("\033[35m\033[2m[save]\033[22;39m Save unsaved changes")
+        print("\033[35m\033[2m[reset]\033[22;39m Delete unsaved changes")
         print("\033[35m\033[2m[q]\033[22;39m Quit")
 
     def list_plants(self):
@@ -153,19 +161,27 @@ class PlantApp():
 
             for p_name in plants:
                 all_waterings = self.__plant_db.get_all_waterings(p_name)
-                last_watering_date = datetime.fromisoformat(all_waterings[0]).date()
-                avg_interval = self.__plant_avg_watering_interval(all_waterings)
+                if len(all_waterings) > 0:
+                    last_watering_date_str = all_waterings[0]
+                    last_watering_date = datetime.fromisoformat(last_watering_date_str).date()
 
-                if last_watering_date:
+                    avg_interval = self.__plant_avg_watering_interval(all_waterings)
+
                     curr_date = datetime.now().date()
                     delta = curr_date - last_watering_date
                     delta = delta.days
 
                     print(f"  · {p_name}: \033[4;34m{last_watering_date.strftime('%d.%m.%y')}\033[24;2m {delta} days ago (avg every {avg_interval} days)\033[22;39m")
                 else:
-                    print(f"  {p_name}: None")
+                    print(f"  · {p_name}: \033[4;34m None \033[24;2m None \033[22;39m")
             print()
 
+
+    def list_change_buffer(self):
+        if len(self.__changes_list) == 0:
+            return
+        print("Unsaved changes:")
+        print('\n'.join(self.__changes_list))
 
     def run(self):
         try:
@@ -175,22 +191,32 @@ class PlantApp():
 
     def __run(self):
         while True:
+            self.list_change_buffer()
             self.print_instructions()
             command = input("> ")
 
             if command == "c":
                 print("Create plant\n")
 
-                p_name = input("Plant name: ")
+                print("Input blank to cancel")
+                p_name = input("Plant name: ").strip()
+                if p_name == "":
+                    print("Cancelled.")
 
-                if self.__plant_db.create_plant(p_name):
+                elif self.__plant_db.create_plant(p_name):
                     print("plant created.")
+                    self.__changes_list.append(f'create "{p_name}"')
+
+                print()
 
             elif command == "w":
-                print("Water plant\n")
-
                 self.list_last_times_watered()
+                print("Input blank to cancel")
                 p_name = input("Plant name: ")
+                if p_name == "":
+                    print("Cancelled.")
+                    print()
+                    continue
     
                 date = datetime.now().date()
                 print(date)
@@ -215,8 +241,14 @@ class PlantApp():
                         continue
 
                 if self.__plant_db.water_plant(p_name, date.isoformat()):
-                    print(f'Plant watered {date}.')
-                    print()
+                    print(f'Watering {p_name}, {date}')
+                    proceed = input("Proceed? (y/n): ")
+                    if proceed == "y":
+                        print(f'Plant watered {date}.')
+                        self.__changes_list.append(f'water "{p_name}"')
+                    else:
+                        print("Cancelled.")
+                print()
 
 
             elif command == "lw":
@@ -233,6 +265,7 @@ class PlantApp():
                     print("Cancelled.")
                 elif self.__plant_db.undo_watering(p_name):
                     print("Watering undone.")
+                    self.__changes_list.append(f'unwater "{p_name}"')
                 else:
                     print("Cancelling.")
 
@@ -246,18 +279,30 @@ class PlantApp():
                     print("Cancelled.")
                 elif self.__plant_db.delete_plant(p_name):
                     print("plant deleted.")
+                    self.__changes_list.append(f'delete "{p_name}"')
                 else:
                     print("Cancelling.")
                 print()
 
             elif command == "q":
+                if len(self.__changes_list) != 0:
+                    self.list_change_buffer()
+                    save = input("Discard unsaved changes? (yes/no):")
+                    if save == "yes":
+                        self.__plant_db.undo_changes()
+
                 self.__plant_db.quit()
                 break
             
-            else:
-                continue
-            
-                
+            elif command == "reset":
+                self.__plant_db.undo_changes()
+                self.__changes_list.clear()
+                print()
+
+            elif command == "save":
+                self.__plant_db.save_changes()
+                print()
+
 
 if __name__ == "__main__":
     app = PlantApp()
