@@ -12,6 +12,8 @@ class PlantDatabase():
             os.mkdir(data_dir)
         except FileExistsError:
             pass
+        except FileNotFoundError:
+            print("Cannot init database at {data_dir}. (FileExistsError)")
 
         self.__db_path = data_dir + db_name
         self.__db = sqlite3.connect(self.__db_path)
@@ -29,7 +31,7 @@ class PlantDatabase():
             pass
 
     def get_plant_id(self, plant_name):
-        plant_id = self.__db.execute("SELECT p.id FROM Plants p WHERE p.name = ? LIMIT 1", [plant_name]).fetchone()
+        plant_id = self.__db.execute("SELECT p.id FROM Plants p WHERE p.name = ?", [plant_name]).fetchone()
         if plant_id:
             plant_id = plant_id[0]
         else:
@@ -83,7 +85,7 @@ class PlantDatabase():
         if plant_id == None:
             return None
 
-        date = self.__db.execute("SELECT w.date, MAX(w.id) FROM Waterings w WHERE w.plant_id = ?", [plant_id]).fetchone()[0]
+        date = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ? ORDER BY date DESC LIMIT 1", [plant_id]).fetchone()[0]
 
         if date:
             watering_date_str = date
@@ -99,7 +101,7 @@ class PlantDatabase():
         if plant_id == None:
             return None
 
-        dates = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ?", [plant_id]).fetchall()
+        dates = self.__db.execute("SELECT w.date FROM Waterings w WHERE w.plant_id = ? ORDER BY date DESC", [plant_id]).fetchall()
 
         dates = [d[0] for d in dates]
         return dates 
@@ -122,32 +124,44 @@ class PlantApp():
 
 
     def print_instructions(self):
-        print("[c] Create plant")
-        print("[w] Water plant")
-        print("[lw] Last watering")
-        print("[ls] List plants")
-        print("[u] Unwater plant")
-        print("[d] Delete plant")
-        print("[q] Quit")
+        print("\033[32m\033[2m[c]\033[22;39m Create plant")
+        print("\033[34m\033[2m[w]\033[22;39m Water plant")
+        print("\033[34m\033[2m[lw]\033[22;39m List last times watered")
+        print("\033[32m\033[2m[ls]\033[22;39m List plants")
+        print("\033[31m\033[2m[u]\033[22;39m Unwater plant")
+        print("\033[31m\033[2m[d]\033[22;39m Delete plant")
+        print("\033[35m\033[2m[q]\033[22;39m Quit")
 
     def list_plants(self):
             plant_names = self.__plant_db.get_all_plant_names()
-            print("Plants:")
             for p in plant_names:
-                print("  " + p)
+                print("  · " + p)
             print()
+
+    def __plant_avg_watering_interval(self, all_waterings:list):
+            # calculate average interval between all waterings
+            interval_sum = 0
+            prev_date = datetime.now().date()
+            for w in all_waterings:
+                delta = prev_date - datetime.fromisoformat(w).date()
+                interval_sum += delta.days
+            avg_interval = round(interval_sum / len (all_waterings), 2)
+            return avg_interval
 
     def list_last_times_watered(self):
             plants = self.__plant_db.get_all_plant_names()
-            print("Last times watered:")
+
             for p_name in plants:
-                watering_date = self.__plant_db.get_last_time_watered(p_name)
-                if watering_date:
+                all_waterings = self.__plant_db.get_all_waterings(p_name)
+                last_watering_date = datetime.fromisoformat(all_waterings[0]).date()
+                avg_interval = self.__plant_avg_watering_interval(all_waterings)
+
+                if last_watering_date:
                     curr_date = datetime.now().date()
-                    delta = curr_date - watering_date
+                    delta = curr_date - last_watering_date
                     delta = delta.days
 
-                    print(f"  {p_name}: {watering_date} ({delta} days ago)")
+                    print(f"  · {p_name}: \033[4;34m{last_watering_date.strftime('%d.%m.%y')}\033[24;2m {delta} days ago (avg every {avg_interval} days)\033[22;39m")
                 else:
                     print(f"  {p_name}: None")
             print()
@@ -181,7 +195,7 @@ class PlantApp():
                 date = datetime.now().date()
                 print(date)
                 do_mod = input("Modify date? (y/n): ")
-                if do_mod:
+                if do_mod == "y":
                     print("To leave a value unchanged, input blank.")
                     year = input("Year: ").strip()
                     month = input("Month: ").strip()
@@ -206,28 +220,35 @@ class PlantApp():
 
 
             elif command == "lw":
-                print("Last waterings\n")
                 self.list_last_times_watered()
 
             elif command == "ls":
                 self.list_plants()
 
             elif command == "u":
-                print("Undo last watering\n")
                 self.list_last_times_watered()
-                p_name = input("Plant name: ")
-
-                if self.__plant_db.undo_watering(p_name):
+                print("Input blank to cancel")
+                p_name = input("Plant name: ").strip()
+                if p_name == "":
+                    print("Cancelled.")
+                elif self.__plant_db.undo_watering(p_name):
                     print("Watering undone.")
-                    print()
+                else:
+                    print("Cancelling.")
+
+                print()
 
             elif command == "d":
                 self.list_plants()
-                p_name = input("Plant name: ")
-
-                if self.__plant_db.delete_plant(p_name):
+                print("Input blank to cancel")
+                p_name = input("Plant name: ").strip()
+                if p_name == "":
+                    print("Cancelled.")
+                elif self.__plant_db.delete_plant(p_name):
                     print("plant deleted.")
-                    print()
+                else:
+                    print("Cancelling.")
+                print()
 
             elif command == "q":
                 self.__plant_db.quit()
