@@ -10,7 +10,7 @@ class PlantApp():
         self.__changes_list = []
 
     def print_instructions(self):
-        print("\033[32m" + "[c] " + "\033[22;39m" + "Create plant")
+        print("\033[32m" + "[a] " + "\033[22;39m" + "Add plant")
         print("\033[32m" + "[d] " + "\033[22;39m" + "Delete plant")
         print("\033[32m" + "[ls] " + "\033[22;39m" + "List plants")
         print("\033[34m" + "[w] " + "\033[22;39m" + "Water plant")
@@ -29,13 +29,19 @@ class PlantApp():
     def __plant_avg_watering_interval(self, all_waterings:list):
             # calculate average interval between all waterings
             waterings = all_waterings.copy()
+            waterings_count = len(waterings)
+            interval_count = waterings_count - 1
             interval_sum = 0
+
             prev_date = datetime.fromisoformat(waterings.pop(0)).date()
             for w in waterings:
-                delta = prev_date - datetime.fromisoformat(w).date()
+                curr_date = datetime.fromisoformat(w).date()
+                delta = prev_date - curr_date
+                prev_date = curr_date
+
                 interval_sum += delta.days
             try:
-                avg_interval = round(interval_sum / len (waterings), 2)
+                avg_interval = round(interval_sum / (interval_count), 2)
             except ZeroDivisionError:
                 avg_interval = None
 
@@ -88,9 +94,7 @@ class PlantApp():
             self.print_instructions()
             command = input("> ")
 
-            if command == "c":
-                print("Create plant\n")
-
+            if command == "a":
                 print("Input blank to cancel")
                 p_name = input("Plant name: ").strip()
                 if p_name == "":
@@ -180,8 +184,10 @@ class PlantApp():
             elif command == "q":
                 if len(self.__changes_list) != 0:
                     self.list_change_buffer()
-                    save = input("Discard unsaved changes? (yes/no):")
+                    save = input("Save unsaved changes? (yes/no):")
                     if save == "yes":
+                        self.__plant_db.save_changes()
+                    else:
                         self.__plant_db.undo_changes()
 
                 self.__plant_db.quit()
@@ -194,6 +200,7 @@ class PlantApp():
 
             elif command == "save":
                 self.__plant_db.save_changes()
+                self.__changes_list.clear()
                 print()
 
 
