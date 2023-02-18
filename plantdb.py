@@ -119,5 +119,5 @@ class PlantDatabase():
     def undo_changes(self):
         self.__db.rollback()
 
-    def save_change(self):
+    def save_changes(self):
         self.__db.commit()
