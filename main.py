@@ -14,6 +14,7 @@ class PlantApp():
         print("\033[32m" + "[d] " + "\033[22;39m" + "Delete plant")
         print("\033[32m" + "[ls] " + "\033[22;39m" + "List plants")
         print("\033[34m" + "[w] " + "\033[22;39m" + "Water plant")
+        print("\033[34m" + "[wa] " + "\033[22;39m" + "Water all plants")
         print("\033[34m" + "[u] " + "\033[22;39m" + "Unwater plant")
         print("\033[34m" + "[lw] " + "\033[22;39m" + "List last times watered")
         print("\033[35m" + "[save] " + "\033[22;39m" + "Save unsaved changes")
@@ -82,6 +83,30 @@ class PlantApp():
         print("Unsaved changes:")
         print('\n'.join(self.__changes_list))
 
+    def modify_date(self, date:datetime.date):
+        do_mod = input("Modify date? (y/n): ")
+        if do_mod == "y":
+            print("To leave a value unchanged, input blank.")
+            year = input("Year: ").strip()
+            month = input("Month: ").strip()
+            day = input("Day: ").strip()
+            try:
+                if year == "":
+                    year = date.year
+                if month == "":
+                    month = date.month
+                if day == "":
+                    day = date.day
+
+                return datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d")
+
+            except:
+                print("invalid date.")
+                return None
+        else:
+            return date
+
+
     def run(self):
         try:
             self.__run()
@@ -117,36 +142,44 @@ class PlantApp():
     
                 date = datetime.now().date()
                 print(date)
-                do_mod = input("Modify date? (y/n): ")
-                if do_mod == "y":
-                    print("To leave a value unchanged, input blank.")
-                    year = input("Year: ").strip()
-                    month = input("Month: ").strip()
-                    day = input("Day: ").strip()
-                    try:
-                        if year == "":
-                            year = date.year
-                        if month == "":
-                            month = date.month
-                        if day == "":
-                            day = date.day
+                date = self.modify_date(date)
+                if not date:
+                    continue
 
-                        date = datetime.strptime(f"{year}-{month}-{day}", "%Y-%m-%d")
+                print(f'Watering {p_name}, {date}')
+                proceed = input("Proceed? (y/n): ")
+                if proceed == "y":
+                    self.__plant_db.water_plant(p_name, date.isoformat())
+                    print(f'Plant watered {date}.')
+                    self.__changes_list.append(f'water "{p_name}"')
+                else:
+                    print("Cancelled.")
 
-                    except:
-                        print("invalid date.")
-                        continue
-
-                if self.__plant_db.water_plant(p_name, date.isoformat()):
-                    print(f'Watering {p_name}, {date}')
-                    proceed = input("Proceed? (y/n): ")
-                    if proceed == "y":
-                        print(f'Plant watered {date}.')
-                        self.__changes_list.append(f'water "{p_name}"')
-                    else:
-                        print("Cancelled.")
                 print()
 
+            elif command == "wa":
+                self.list_last_times_watered()
+                date = datetime.now().date()
+                print(date)
+                date = self.modify_date(date)
+                if not date: 
+                    continue
+
+                print(f'Watering all plants, {date}')
+                proceed = input("Proceed? (y/n): ")
+                if proceed == "y":
+                    plants = self.__plant_db.get_all_plant_names()
+                    for p in plants:
+                        self.__plant_db.water_plant(p, date)
+
+                    for p in plants:
+                        self.__changes_list.append(f'water "{p}"')
+
+                    print(f'All plants watered {date}.')
+                else:
+                    print("Cancelled.")
+
+                print()
 
             elif command == "lw":
                 self.list_last_times_watered()
